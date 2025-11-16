@@ -195,7 +195,7 @@ class DesicitionTree():
     probs = torch.bincount(target) / len(target)
 
     # Apply the formula
-    return -(torch.sum([prob*torch.log(prob) for prob in probs if prob > 0]))
+    return -(torch.sum([prob*torch.log2(prob) for prob in probs if prob > 0]))
   
 
   def _split(self, X_column, value):
