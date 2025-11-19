@@ -18,6 +18,7 @@ where E = entropy
 import numpy as np
 import pandas as pd
 import torch # Useful to potentially bring computations to CUDA
+import pickle
 from collections import Counter
 
 '''
@@ -31,28 +32,12 @@ feature_data_type_lookup_table = [1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0
 # -- Main classes --
 # ------------------
 
-# Question can be think of as a split node
-class Question():
-  def __init__(self, feature=None, value=None):
-    assert self.feature <= (len(feature_data_type_lookup_table)-1), "feature is outside of the lookup table boundaries"
-
-    feature_data_type = feature_data_type_lookup_table[self.feature]
-    assert feature_data_type == 3, "Target feature is not supposed to be used in the split node"
+def selectDevice():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    torch.backends.cudnn.benchmark = True
+    print(f"Device selected: {device}")
     
-    self.feature = feature
-    self.value = value
-
-    # Based on the data type, define the match and represent functions' behavior
-    # Sample = a single row of data
-    if( feature_data_type == 0 ):
-      # Numerical
-      self.match = lambda sample: sample[self.feature] >= self.value
-      self.__repr__ = f"Question: {dataset.columns[self.feature]} >= {self.value}" 
-    else:
-      # Nominal / Categorical
-      self.match = lambda sample: sample[self.feature] == self.value
-      self.__repr__ = f"Question: {dataset.columns[self.feature]} == {self.value}" 
-
+    return device
 
 class Node():
   def __init__(self, feature=None, value=None, left=None, right=None, leafValue=None):
@@ -60,18 +45,44 @@ class Node():
     self.value = value      # threshold for numerical, category title/value for categorical/nominal
     self.left = left        # left node 
     self.right = right      # right node
-    self.leafValue = None   # the final value for a leaf node
+    self.leafValue = leafValue   # the final value for a leaf node
   
   def is_leaf_node(self):
-    return self.leafValue is None
+    return self.leafValue is not None
+  
+  def describe_yourself(self, depth=0):
+    # [RECURSIVE]
+    indent = "    " * depth
+
+    # Base case
+    if self.is_leaf_node():
+      print(f"{indent}Leaf: {self.leafValue}")
+      return
+    else:
+      print(f"{indent}Current Node's value: {self.value}")
+
+    # Left side
+    print(f"{indent}Left side (x[{self.feature}] <= {self.value})")
+    if self.left is not None:
+      self.left.describe_yourself(depth=(depth+1))
+    else:
+      print(f"{indent}Empty")
+
+    # Right side
+    print(f"{indent}Right side (x[{self.feature}] > {self.value})")
+    if self.right is not None:
+      self.right.describe_yourself(depth=(depth+1))
+    else:
+      print(f"{indent}Empty")
 
 
-class DesicitionTree():
-  def __init__(self, min_samples_split=2, max_depth=100, num_features=None):
+class DecisionTree():
+  def __init__(self, device, min_samples_split=2, max_depth=100, num_features=None):
     # Stopping criterias
     self.min_samples_split = min_samples_split
     self.max_depth = max_depth
     self.num_features = num_features # Essential for random forest to use subsets of features
+    self.device = device
 
     # General
     self.root = None
@@ -79,12 +90,22 @@ class DesicitionTree():
   def fit(self, dataset, target):
     # X = dataset, y = target
     # _func_name = local function helper, not meant to be invoked by the user
+
+    # Transform dataset and target into PyTorch tensors on the device(CUDA/CPU)
+    '''
+    # In the current implementation, main.py provides tensors already
+    dataset = torch.tensor(dataset, dtype=torch.float32, device=self.device)
+    target = torch.tensor(target, dtype=torch.long, device=self.device)
+    '''
     
     # Ensure we have the correct number of features
     self.num_features = dataset.shape[1] if self.num_features is None else min(dataset.shape[1], self.num_features)
 
     # Get current root
     self.root = self._grow_tree(dataset, target)
+   
+  def predict(self, dataset): 
+    return torch.tensor([self._traverse_tree(x, self.root) for x in dataset])
 
   # ----------------------
   # -- Static Functions --
@@ -108,7 +129,7 @@ class DesicitionTree():
 
     # If the stopping criterias are not met
     # Generate specific number(self.num_features) of random unique feature IDs
-    feature_ids = torch.multinomial(total_num_features, self.num_features, replacement=True )
+    feature_ids = torch.randperm(total_num_features, device=self.device)[:self.num_features]
 
     # Find the best split
     best_feature, best_value, left_ids, right_ids = self._best_split(dataset, target, feature_ids)
@@ -120,23 +141,14 @@ class DesicitionTree():
     # Return the split info as a Node
     return Node(best_feature, best_value, left, right)
 
-
-  def _most_common_label(target):
-    counter = Counter(target)
-
-    # Get the most common element. Returns array of (element's value, frequency) tuple
-    holder = counter.most_common(1)
-    # Open up the array since we have only one tuple in it
-    holder = holder[0]
-    # Get the value
-    holder = holder[0]
-
-    return holder
-
+  def _most_common_label(self, target):
+    values, counts = torch.unique(target, return_counts=True)
+    
+    return values[torch.argmax(counts)].item()
 
   def _best_split(self, dataset, target, feature_ids):
     # Counter
-    best_gain = -1
+    best_gain = torch.tensor(-1, dtype=torch.float32, device=self.device)
 
     # Final result holders
     split_ids, split_values, left_ids, right_ids = None, None, None, None
@@ -161,7 +173,6 @@ class DesicitionTree():
           right_ids = temp_right_ids
       
     return split_ids, split_values, left_ids, right_ids
-  
 
   def _information_gain(self, target, X_column, value):
     # Parent entropy
@@ -175,7 +186,7 @@ class DesicitionTree():
     n_left = len(left_ids)
     n_right = len(right_ids)
     if (n_left == 0) or (n_right == 0):
-      return 0
+      return 0, left_ids, right_ids
 
     # Prepare values to calculate the entropy for children
     n = len(target)
@@ -189,28 +200,52 @@ class DesicitionTree():
 
     return information_gain, left_ids, right_ids 
 
-
   def _entropy(self, target):
     # Get the probability
     probs = torch.bincount(target) / len(target)
 
     # Apply the formula
-    return -(torch.sum([prob*torch.log2(prob) for prob in probs if prob > 0]))
+    return -(torch.sum(torch.tensor([prob*torch.log2(prob) for prob in probs if prob > 0], dtype=torch.float32, device=self.device)))
   
-
   def _split(self, X_column, value):
     # Split by getting corresponding flat list of indices
     left_ids = torch.argwhere(X_column <= value).flatten()
     right_ids = torch.argwhere(X_column > value).flatten()
 
     return left_ids, right_ids
+  
+  def _traverse_tree(self, dataset, node):
+    # [RECURSIVE]
 
+    # Base case  
+    if node.is_leaf_node():
+      return node.leafValue
+    
+    # Traverse to the left or right
+    if dataset[node.feature] <= node.value:
+      return self._traverse_tree(dataset, node.left)
+     
+    return self._traverse_tree(dataset, node.right)
+  
+  def __repr__(self):
+    # [RECURSIVE]
 
+    # Ensure the tree has been generated already
+    if self.root is None:
+      return "DecisionTree(root=None)"
+    
+    self.root.describe_yourself(depth=0)
+    return ""
+  
+  def _save(self, path: str):
+        """Save trained tree to disk."""
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
 
-  def predict(self): 
-    pass
-
-if __name__ == "__main__":
-  # Load in the dataset
-  dataset = pd.read_parquet("/Users/ruslanabdulin/Desktop/CSUN/Fall25/COMP541/data/df_preprocessed.parquet")
-  # dataset.info(verbose=True)
+  def _load(path: str, device=None):
+      """Load trained tree from disk."""
+      with open(path, "rb") as f:
+          tree: "DecisionTree" = pickle.load(f)
+      if device is not None:
+          tree.device = device
+      return tree
