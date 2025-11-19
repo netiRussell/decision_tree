@@ -81,6 +81,8 @@ class DecisionTree():
     # Stopping criterias
     self.min_samples_split = min_samples_split
     self.max_depth = max_depth
+
+    # Other parameters
     self.num_features = num_features # Essential for random forest to use subsets of features
     self.device = device
 
@@ -105,7 +107,7 @@ class DecisionTree():
     self.root = self._grow_tree(dataset, target)
    
   def predict(self, dataset): 
-    return torch.tensor([self._traverse_tree(x, self.root) for x in dataset])
+    return torch.tensor([self._traverse_tree(x, self.root) for x in dataset], dtype=torch.int64, device=self.device)
 
   # ----------------------
   # -- Static Functions --
@@ -133,6 +135,12 @@ class DecisionTree():
 
     # Find the best split
     best_feature, best_value, left_ids, right_ids = self._best_split(dataset, target, feature_ids)
+
+    # If no valid split found, return a leaf node
+    if (left_ids is None or right_ids is None 
+        or len(left_ids) == 0 or len(right_ids) == 0):
+        leafValue = self._most_common_label(target)
+        return Node(leafValue=leafValue)
     
     # Recursive call to itself
     left = self._grow_tree(dataset[left_ids, :], target[left_ids], depth+1,)
@@ -186,7 +194,7 @@ class DecisionTree():
     n_left = len(left_ids)
     n_right = len(right_ids)
     if (n_left == 0) or (n_right == 0):
-      return 0, left_ids, right_ids
+      return torch.tensor(-1.0, dtype=torch.float32, device=self.device), left_ids, right_ids
 
     # Prepare values to calculate the entropy for children
     n = len(target)
@@ -241,7 +249,8 @@ class DecisionTree():
         """Save trained tree to disk."""
         with open(path, "wb") as f:
             pickle.dump(self, f)
-
+  
+  @staticmethod
   def _load(path: str, device=None):
       """Load trained tree from disk."""
       with open(path, "rb") as f:

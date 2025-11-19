@@ -1,6 +1,7 @@
 import pandas as pd
 import torch
-from dt import DecisionTree, selectDevice
+from dt import selectDevice
+from rf import RandomForest
 
 if __name__ == "__main__":
   # Select device
@@ -11,7 +12,7 @@ if __name__ == "__main__":
   #dataset.info(verbose=True)
 
   # Define the model
-  dt = DecisionTree(device, min_samples_split=2, max_depth=50, num_features=20)
+  rf = RandomForest(device, n_trees=10, min_samples_split=2, max_depth=20, num_features=20)
 
   # Get the training samples out for the satjob:
     # All of the ones that have a non-NaN value for the 'satjob' feature
@@ -42,20 +43,18 @@ if __name__ == "__main__":
   satjob_test_X,  satjob_test_target  = X_all_satjob[test_idx],  y_all_satjob[test_idx]
 
   # Train
-  print(f"Number of samples in X:{len(satjob_train_X)}, in Y:{len(satjob_train_target)}")
+  # print(f"Number of samples in X:{len(satjob_train_X)}, in Y:{len(satjob_train_target)}")
   print("Training has been started")
-  dt.fit(satjob_train_X, satjob_train_target)
+  rf.fit(satjob_train_X, satjob_train_target)
 
   # Test the accuracy for satjob
   print("Testing has been started")
-  prediction = dt.predict(satjob_test_X)
-  print(prediction)
-  print("\n", satjob_train_target)
+  prediction = rf.predict(satjob_test_X)
   print(f"Accuracy: {torch.sum(prediction == satjob_test_target)/len(satjob_test_target)}")
 
   # Demonstrate the resulting tree
-  #print("\n\n", dt)
+  #print("\n\n", rf)
 
   # Save
-  #dt.save("decision_tree.pkl")
+  #rf.save("decision_tree.pkl")
   #print("Decision Tree has been saved")
