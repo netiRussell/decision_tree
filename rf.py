@@ -22,7 +22,7 @@ class RandomForest():
   def fit(self, X, target):
     # Main logic
     for i in range(self.n_trees):
-      print(f"Current tree{i}")
+      #print(f"Current tree{i}")
 
       # Create a tree
       tree = DecisionTree(self.device, self.min_samples_split, self.max_depth, self.num_features )

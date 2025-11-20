@@ -3,6 +3,7 @@ import torch
 from dt import selectDevice
 from rf import RandomForest
 
+
 if __name__ == "__main__":
   # Select device
   device = selectDevice()
@@ -53,8 +54,8 @@ if __name__ == "__main__":
   print(f"Accuracy: {torch.sum(prediction == satjob_test_target)/len(satjob_test_target)}")
 
   # Demonstrate the resulting tree
-  #print("\n\n", rf)
+  print("\n\n", rf)
 
   # Save
-  #rf.save("decision_tree.pkl")
-  #print("Decision Tree has been saved")
+  rf.save("decision_tree.pkl")
+  print("Decision Tree has been saved")
