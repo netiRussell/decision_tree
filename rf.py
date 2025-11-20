@@ -34,7 +34,10 @@ class RandomForest():
 
   def predict(self, X):
     # Get predictions from each tree
-    predictions = torch.tensor([tree.predict(X) for tree in self.trees], dtype=torch.int64, device=self.device)
+    tree_preds = [tree.predict(X) for tree in self.trees]
+
+    # Stack into shape (n_trees, n_samples)
+    predictions = torch.stack(tree_preds, dim=0)
 
     # Swap axes to have array per prediction of all trees, not per tree
     predictions = torch.swapaxes(predictions, 0, 1)
