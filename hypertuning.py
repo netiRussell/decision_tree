@@ -66,12 +66,12 @@ if __name__ == "__main__":
   #  # # # # # # # # # # # # # #
 
   # Load in the dataset
-  dataset = pd.read_parquet("/Users/ruslanabdulin/Desktop/CSUN/Fall25/COMP541/data/df_preprocessed.parquet")
+  dataset = pd.read_parquet("./df_preprocessed.parquet")
   #dataset.info(verbose=True)
 
   # Get the training samples out for the satjob:
     # All of the ones that have a non-NaN value for the 'satjob' feature
-  satjob_subset = dataset.loc[dataset['satjob'].notna()]
+  satjob_subset = dataset.loc[dataset['satfin'].notna()]
 
   # Build full X, y tensors
   X_all_satjob = torch.tensor(
@@ -80,7 +80,7 @@ if __name__ == "__main__":
       device=device
   )
   y_all_satjob = torch.tensor(
-      satjob_subset['satjob'].to_numpy(dtype='int64'),
+      satjob_subset['satfin'].to_numpy(dtype='int64'),
       dtype=torch.int64,
       device=device
   )
