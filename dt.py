@@ -40,8 +40,9 @@ def selectDevice():
     return device
 
 class Node():
-  def __init__(self, feature=None, value=None, left=None, right=None, leafValue=None):
-    self.feature = feature  # column
+  def __init__(self, feature_name=None, feature_id=None, value=None, left=None, right=None, leafValue=None):
+    self.feature_name = feature_name
+    self.feature = feature_id  # column
     self.value = value      # threshold for numerical, category title/value for categorical/nominal
     self.left = left        # left node 
     self.right = right      # right node
@@ -56,28 +57,28 @@ class Node():
 
     # Base case
     if self.is_leaf_node():
-      print(f"{indent}Leaf: {self.leafValue}")
-      return
-    else:
-      print(f"{indent}Current Node's value: {self.value}")
+      return f"{indent}Leaf: {self.leafValue}\n"
+
+    out = f"{indent}Current Node's value: {self.value}\n"
 
     # Left side
-    print(f"{indent}Left side (x[{self.feature}] <= {self.value})")
+    out += f"{indent}Left side ({self.feature_name} <= {self.value})\n"
     if self.left is not None:
-      self.left.describe_yourself(depth=(depth+1))
+      out += self.left.describe_yourself(depth=(depth+1))
     else:
-      print(f"{indent}Empty")
+      out += "{indent}Empty\n"
 
     # Right side
-    print(f"{indent}Right side (x[{self.feature}] > {self.value})")
+    out += f"{indent}Right side ({self.feature_name} > {self.value})\n"
     if self.right is not None:
-      self.right.describe_yourself(depth=(depth+1))
+      out += self.right.describe_yourself(depth=(depth+1))
     else:
-      print(f"{indent}Empty")
+      out += f"{indent}Empty\n"
 
+    return out
 
 class DecisionTree():
-  def __init__(self, device, min_samples_split=2, max_depth=100, num_features=None):
+  def __init__(self, device, min_samples_split=2, max_depth=100, num_features=None, feature_names=None):
     # Stopping criterias
     self.min_samples_split = min_samples_split
     self.max_depth = max_depth
@@ -85,6 +86,7 @@ class DecisionTree():
     # Other parameters
     self.num_features = num_features # Essential for random forest to use subsets of features
     self.device = device
+    self.feature_names = feature_names
 
     # General
     self.root = None
@@ -134,7 +136,7 @@ class DecisionTree():
     feature_ids = torch.randperm(total_num_features, device=self.device)[:self.num_features]
 
     # Find the best split
-    best_feature, best_value, left_ids, right_ids = self._best_split(dataset, target, feature_ids)
+    best_feature_name, best_feature_id, best_value, left_ids, right_ids = self._best_split(dataset, target, feature_ids)
 
     # If no valid split found, return a leaf node
     if (left_ids is None or right_ids is None 
@@ -147,7 +149,7 @@ class DecisionTree():
     right = self._grow_tree(dataset[right_ids, :], target[right_ids], depth+1,)
 
     # Return the split info as a Node
-    return Node(best_feature, best_value, left, right)
+    return Node(best_feature_name, best_feature_id, best_value, left, right)
 
   def _most_common_label(self, target):
     values, counts = torch.unique(target, return_counts=True)
@@ -159,7 +161,7 @@ class DecisionTree():
     best_gain = torch.tensor(-1, dtype=torch.float32, device=self.device)
 
     # Final result holders
-    split_ids, split_values, left_ids, right_ids = None, None, None, None
+    split_feature_name, split_feature_id, split_values, left_ids, right_ids = None, None, None, None, None
 
     # Go over every feature (column) among the chosen subset
     for feature_id in feature_ids:
@@ -175,12 +177,13 @@ class DecisionTree():
         # Update current best result
         if gain > best_gain:
           best_gain = gain
-          split_ids = feature_id
+          split_feature_name = self.feature_names[feature_id]
+          split_feature_id = feature_id
           split_values = value
           left_ids = temp_left_ids
           right_ids = temp_right_ids
       
-    return split_ids, split_values, left_ids, right_ids
+    return split_feature_name, split_feature_id, split_values, left_ids, right_ids
 
   def _information_gain(self, target, X_column, value):
     # Parent entropy
@@ -234,7 +237,26 @@ class DecisionTree():
       return self._traverse_tree(dataset, node.left)
      
     return self._traverse_tree(dataset, node.right)
-  
+
+  def to_dict(self):
+    # [RECURSIVE]
+    
+    def node_to_dict(node):
+        # Base case
+        if node.is_leaf_node():
+            return {"leaf": int(node.leafValue), "leafValue": node.leafValue}
+        
+        return {
+            "feature": int(node.feature),
+            "feature_name": node.feature_name,
+            "value": float(node.value),
+            "left": node_to_dict(node.left),
+            "right": node_to_dict(node.right)
+        }
+    
+    return node_to_dict(self.root)
+ 
+
   def __repr__(self):
     # [RECURSIVE]
 
@@ -242,8 +264,8 @@ class DecisionTree():
     if self.root is None:
       return "DecisionTree(root=None)"
     
-    self.root.describe_yourself(depth=0)
-    return ""
+    return self.root.describe_yourself(depth=0)
+    
   
   def _save(self, path: str):
         """Save trained tree to disk."""

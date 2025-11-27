@@ -3,7 +3,37 @@ import torch
 from dt import selectDevice
 from rf import RandomForest
 
+# Visualization logic
+from graphviz import Digraph
 
+def _add_nodes(dot, node, name="0"):
+    # [RECURSIVE]
+
+    # Base case
+    if "leaf" in node:
+        dot.node(name, f"Leaf: {node['leafValue']}", shape="box")
+    # Internal node
+    else:
+        label = f"{node['feature_name']} <= {node['value']:.3f}"
+        dot.node(name, label)
+        left_name = name + "L"
+        right_name = name + "R"
+        dot.edge(name, left_name, label="True")
+        dot.edge(name, right_name, label="False")
+        _add_nodes(dot, node["left"], left_name)
+        _add_nodes(dot, node["right"], right_name)
+
+def tree_to_graphviz(tree_dict):
+    dot = Digraph()
+    _add_nodes(dot, tree_dict, "0")
+    return dot
+
+# Configurations holder
+config = {
+  "label_name": "satjob" # either satjob or satfin
+}
+
+# Main logic
 if __name__ == "__main__":
   # Select device
   device = selectDevice()
@@ -13,26 +43,26 @@ if __name__ == "__main__":
   #dataset.info(verbose=True)
 
   # Define the model
-  rf = RandomForest(device, n_trees=10, min_samples_split=2, max_depth=20, num_features=20)
+  rf = RandomForest(device, num_trees=20, min_samples_split=6, max_depth=5, num_features=5, feature_names=dataset.columns.tolist())
 
   # Get the training samples out for the satjob:
-    # All of the ones that have a non-NaN value for the 'satjob' feature
-  satjob_subset = dataset.loc[dataset['satjob'].notna()]
+    # All of the ones that have a non-NaN value for the label feature
+  label_subset = dataset.loc[dataset[config['label_name']].notna()]
 
   # Build full X, y tensors
-  X_all_satjob = torch.tensor(
-      satjob_subset.drop(['satjob', 'satfin'], axis=1).to_numpy(dtype='float32'),
+  X_all = torch.tensor(
+      label_subset.drop(['satjob', 'satfin'], axis=1).to_numpy(dtype='float32'),
       dtype=torch.float32,
       device=device
   )
-  y_all_satjob = torch.tensor(
-      satjob_subset['satjob'].to_numpy(dtype='int64'),
+  y_all_label = torch.tensor(
+      label_subset[config['label_name']].to_numpy(dtype='int64'),
       dtype=torch.int64,
       device=device
   )
 
   #  Train / test split 
-  n_samples = X_all_satjob.shape[0]
+  n_samples = X_all.shape[0]
   perm = torch.randperm(n_samples, device=device)  # shuffle indices
   
   # 80% train, 20% test
@@ -40,22 +70,28 @@ if __name__ == "__main__":
   train_idx = perm[:train_size]
   test_idx  = perm[train_size:]
 
-  satjob_train_X, satjob_train_target = X_all_satjob[train_idx], y_all_satjob[train_idx]
-  satjob_test_X,  satjob_test_target  = X_all_satjob[test_idx],  y_all_satjob[test_idx]
+  train_X, train_target = X_all[train_idx], y_all_label[train_idx]
+  test_X,  test_target  = X_all[test_idx],  y_all_label[test_idx]
 
   # Train
-  # print(f"Number of samples in X:{len(satjob_train_X)}, in Y:{len(satjob_train_target)}")
+  # print(f"Number of samples in X:{len(train_X)}, in Y:{len(train_target)}")
   print("Training has been started")
-  rf.fit(satjob_train_X, satjob_train_target)
+  rf.fit(train_X, train_target)
 
   # Test the accuracy for satjob
   print("Testing has been started")
-  prediction = rf.predict(satjob_test_X)
-  print(f"Accuracy: {torch.sum(prediction == satjob_test_target)/len(satjob_test_target)}")
+  prediction = rf.predict(test_X)
+  print(f"Accuracy: {torch.sum(prediction == test_target)/len(test_target)}")
 
-  # Demonstrate the resulting tree
-  print("\n\n", rf)
+  # Demonstrate the resulting trees
+  # Reminder: I utilize the majority vote approach; hence, no explicit connection between the trees
+  rf_dict = rf.to_dict()
+  for i in range(rf.num_trees):
+    tree = rf_dict["trees"][i]
+    dot = tree_to_graphviz(tree)
+    dot.render(f"./plots/{config['label_name']}/tree{i}", format="png")
+  print("Decision Trees have been illustrated and saved")
 
   # Save
-  rf.save("decision_tree.pkl")
-  print("Decision Tree has been saved")
+  rf._save(f"./{config['label_name']}/RandomForest.pkl")
+  print("RF has been saved")

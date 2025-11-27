@@ -1,6 +1,4 @@
 # Random forest
-import numpy as np
-import pandas as pd
 import torch # Useful to potentially bring computations to CUDA
 import pickle
 
@@ -8,24 +6,25 @@ from dt import DecisionTree
 
 class RandomForest():
 
-  def __init__(self, device, n_trees=10, min_samples_split=2, max_depth=100, num_features=None):
+  def __init__(self, device=None, num_trees=10, min_samples_split=2, max_depth=100, num_features=None, feature_names=None):
     # Stopping criterias
     self.min_samples_split = min_samples_split
     self.max_depth = max_depth
 
     # Other parameters
-    self.n_trees = n_trees
+    self.num_trees = num_trees
     self.num_features = num_features
-    self.trees = [None]*self.n_trees
+    self.trees = [None]*self.num_trees
     self.device = device
+    self.feature_names = feature_names
 
   def fit(self, X, target):
     # Main logic
-    for i in range(self.n_trees):
+    for i in range(self.num_trees):
       #print(f"Current tree{i}")
 
       # Create a tree
-      tree = DecisionTree(self.device, self.min_samples_split, self.max_depth, self.num_features )
+      tree = DecisionTree(self.device, self.min_samples_split, self.max_depth, self.num_features, self.feature_names )
       # Get a subset of the data
       X_datasubset, target_datasubset = self._get_subsets(X, target) 
       # Fit the tree
@@ -36,7 +35,7 @@ class RandomForest():
     # Get predictions from each tree
     tree_preds = [tree.predict(X) for tree in self.trees]
 
-    # Stack into shape (n_trees, n_samples)
+    # Stack into shape (num_trees, n_samples)
     predictions = torch.stack(tree_preds, dim=0)
 
     # Swap axes to have array per prediction of all trees, not per tree
@@ -44,6 +43,27 @@ class RandomForest():
 
     # The majority vote per prediction
     return torch.tensor([self._most_common_label(pred) for pred in predictions], dtype=torch.int64, device=self.device)
+
+  def to_dict(self):
+    # Turn the RF to Python dictionary for the visualization
+    return {
+        "num_trees": self.num_trees,
+        "min_samples_split": self.min_samples_split,
+        "max_depth": self.max_depth,
+        "num_features": self.num_features,
+        "trees": [tree.to_dict() for tree in self.trees]
+    }
+
+  def __repr__(self):
+    # [RECURSIVE]
+    lines = [f"RandomForest(num_trees={self.num_trees}, "
+              f"min_samples_split={self.min_samples_split}, "
+              f"max_depth={self.max_depth}, "
+              f"num_features={self.num_features})"]
+    for i, tree in enumerate(self.trees):
+        lines.append(f"\n=== Tree {i} ===")
+        lines.append(repr(tree))
+    return "\n".join(lines)
 
   # ----------------------
   # -- Static Functions --
