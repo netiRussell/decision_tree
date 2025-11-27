@@ -8,8 +8,8 @@ from dt import selectDevice
 from rf import RandomForest
 
 config = {
-  "label_name": "satjob", # either satjob or satfin
-  "batch_size": 5000, # num of samples to predict per batch
+  "label_name": "satfin", # either satjob or satfin
+  "batch_size": 2500, # num of samples to predict per batch
 }
 
 if __name__ == "__main__":
@@ -17,7 +17,7 @@ if __name__ == "__main__":
   device = selectDevice()
 
   # Load in the dataset
-  dataset = pd.read_parquet("/Users/ruslanabdulin/Desktop/CSUN/Fall25/COMP541/data/df_preprocessed.parquet")
+  dataset = pd.read_parquet("/Users/ruslanabdulin/Desktop/CSUN/Fall25/COMP541/data/df_preprocessed_with_predictions.parquet")
   #dataset.info(verbose=True)
 
   # Get the input and the target rows out for the dataset:
@@ -49,5 +49,5 @@ if __name__ == "__main__":
 
   # Saving the dataset
   print("Saving the updated dataset...")
-  dataset.to_parquet( "/Users/ruslanabdulin/Desktop/CSUN/Fall25/COMP541/data/df_preprocessed_with_predictions.parquet", index=False )
+  dataset.to_parquet( "/Users/ruslanabdulin/Desktop/CSUN/Fall25/COMP541/data/df_preprocessed_with_predictions2.parquet", index=False )
   print("Done.")

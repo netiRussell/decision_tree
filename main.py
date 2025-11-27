@@ -30,7 +30,7 @@ def tree_to_graphviz(tree_dict):
 
 # Configurations holder
 config = {
-  "label_name": "satjob" # either satjob or satfin
+  "label_name": "satfin" # either satjob or satfin
 }
 
 # Main logic
@@ -43,7 +43,7 @@ if __name__ == "__main__":
   #dataset.info(verbose=True)
 
   # Define the model
-  rf = RandomForest(device, num_trees=20, min_samples_split=6, max_depth=5, num_features=5, feature_names=dataset.columns.tolist())
+  rf = RandomForest(device, num_trees=15, min_samples_split=5, max_depth=5, num_features=5, feature_names=dataset.columns.tolist())
 
   # Get the training samples out for the satjob:
     # All of the ones that have a non-NaN value for the label feature
@@ -81,7 +81,7 @@ if __name__ == "__main__":
   # Test the accuracy for satjob
   print("Testing has been started")
   prediction = rf.predict(test_X)
-  print(f"Accuracy: {torch.sum(prediction == test_target)/len(test_target)}")
+  print(f"Accuracy: {(torch.sum(prediction == test_target)/len(test_target))*100:.2f}%")
 
   # Demonstrate the resulting trees
   # Reminder: I utilize the majority vote approach; hence, no explicit connection between the trees
@@ -92,6 +92,33 @@ if __name__ == "__main__":
     dot.render(f"./plots/{config['label_name']}/tree{i}", format="png")
   print("Decision Trees have been illustrated and saved")
 
-  # Save
+  # F1, DR, FA calculations per class
+  # Get unique cases
+  classes = torch.unique(test_target)
+
+  print("\nPer-class metrics:")
+  for cls in classes:
+      # Confusion matrix calculation
+      tp = torch.sum((prediction == cls) & (test_target == cls)).item()
+      fn = torch.sum((prediction != cls) & (test_target == cls)).item()
+      fp = torch.sum((prediction == cls) & (test_target != cls)).item()
+      tn = torch.sum((prediction != cls) & (test_target != cls)).item()
+
+      # Ensure each value is of the float type
+      tp, fn, fp, tn = map(float, (tp, fn, fp, tn))
+
+      # Compute the metrices
+      dr = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+      fa = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+
+      precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+      f1 = 2 * precision * dr / (precision + dr) if (precision + dr) > 0 else 0.0
+
+      print(f"Class {int(cls)}:")
+      print(f"  DR (Recall): {dr:.4f}")
+      print(f"  FA (False Alarm): {fa:.4f}")
+      print(f"  F1 score: {f1:.4f}")
+
+  # Save the final object
   rf._save(f"./{config['label_name']}/RandomForest.pkl")
   print("RF has been saved")
