@@ -21,5 +21,7 @@ Evaluation plan:
 Data: datasets with historical data of career-related information like educational level, field, satisfaction, salary, etc. (1)  https://gssdataexplorer.norc.org (2) https://usa.ipums.org/usa/ 
 
 Presentations:
-1.https://docs.google.com/presentation/d/136RyvG1Tp7fiw9j5G7z_p3-z5OjyrIl6OIJAp8nE7KU/edit?usp=drive_link
+1.https://docs.google.com/presentation/d/1zzIzo8nNb4FlXSV_yGJhBR1kBfp7iar2SAlkuLILUZI/edit?usp=sharing
 2.https://docs.google.com/presentation/d/1TGK9Zf56uqxra9NmVw2OJm6T4yG6tynDilEyFYUetD8/edit?usp=drive_link
+
+Final report with results and conclusion: https://docs.google.com/document/d/1VVZFfe_FtTIPJ5V8hdrXs84kfc3wQ7kGbpNxWuPJzWg/edit?usp=sharing
